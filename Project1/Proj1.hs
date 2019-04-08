@@ -70,14 +70,13 @@ toPitch xs
 -- | feedback is the composer function.
 --   it takes the target chord and the performer's guess, and returns the feedback,
 --   (correct Pitch numbers, correct Note numbers, correct Octave numbers).
---   correct Pitch numbers is the length of intersection between guess and target.
---   correct Note numbers is lenghth of Note intersection minus correct Pitch.
---   correct Octave numbers is length of Octave Intersection minus correct Pitch.
 feedback :: [Pitch] -> [Pitch] -> (Int, Int, Int)
 feedback target guess = (f1, f2, f3)
-    where f1 = length (intersect guess target)
-          f2 = length (intersect (map (note) guess) (map (note) target)) - f1
-          f3 = length (intersect (map (octave) guess) (map (octave) target)) - f1
+    where diffNote   = (map (note) guess) \\ (map (note) target)
+          diffOctave = (map (octave) guess) \\ (map (octave) target)
+          f1 = length (intersect guess target)
+          f2 = 3 - length (diffNote) - f1
+          f3 = 3 - length (diffOctave) - f1
 
 
 
@@ -115,37 +114,9 @@ pitchList = map makePitch [0..20]
 --   calulates the average expcted number of guess for each possible
 --   target, and make the one with minimum value the next guess.
 nextGuess :: ([Pitch], GameState) -> (Int, Int, Int) -> ([Pitch], GameState)
-nextGuess (guess, gamestate) (f1,f2,f3) = (calculatedGuess newgamestate, newgamestate)
-    where newgamestate = removeByOctave (f1+f3) guess        -- remove inconsistent Octaves
-                         (removeByNote (f1+f2) guess         -- remove inconsistent Notes
-                         (removeByPitch f1 guess gamestate)) -- remove inconsistent Pitches
--- | removeByPitch removes inconsistent Pitches from GameState
---   by the no. of correct Pitches in feedback
-removeByPitch :: Int -> [Pitch] -> GameState -> GameState
-removeByPitch n guess gamestate =
-    case n of
-        0 -> filter (\a -> (length (intersect guess a)) == 0) gamestate
-        1 -> filter (\a -> (length (intersect guess a)) == 1) gamestate
-        2 -> filter (\a -> (length (intersect guess a)) == 2) gamestate
-        3 -> filter (\a -> (length (intersect guess a)) == 3) gamestate
--- | removeByNote removes inconsistent Notes from GameState
---   by the no. of correct Notes in the feedback
-removeByNote :: Int -> [Pitch] -> GameState -> GameState
-removeByNote n guess gamestate = 
-    case n of 
-        0 -> filter (\a -> (length (intersect (map (note) guess) (map (note) a))) == 0) gamestate
-        1 -> filter (\a -> (length (intersect (map (note) guess) (map (note) a))) == 1) gamestate
-        2 -> filter (\a -> (length (intersect (map (note) guess) (map (note) a))) == 2) gamestate
-        3 -> filter (\a -> (length (intersect (map (note) guess) (map (note) a))) == 3) gamestate
--- | removeByOctave removes inconsistent Octaves from GameState
---   by the no. of correct Octaves in the feedback
-removeByOctave :: Int -> [Pitch] -> GameState -> GameState
-removeByOctave n guess gamestate = 
-    case n of  
-        0 -> filter (\a -> (length (intersect (map (octave) guess) (map (octave) a))) == 0) gamestate
-        1 -> filter (\a -> (length (intersect (map (octave) guess) (map (octave) a))) == 1) gamestate
-        2 -> filter (\a -> (length (intersect (map (octave) guess) (map (octave) a))) == 2) gamestate
-        3 -> filter (\a -> (length (intersect (map (octave) guess) (map (octave) a))) == 3) gamestate
+nextGuess (guess,gamestate) f = (calculatedGuess newgs, newgs)
+    where newgs = filter (\a -> feedback a guess == f) gamestate
+          -- possible targets generates different feedback are removed.
 --  | calculatedGuess takes the current GameState as input,
 --    calculates the exptected avergae guesses left when taking
 --    every remaining guess as target, and returns the minimum one.
@@ -156,11 +127,11 @@ calculatedGuess gamestate =minExpPitch ([((getExpNum t gamestate),t) | t <- game
 --   first element.
 minExpPitch :: Ord a => [(a,b)] -> b
 minExpPitch [] = error "minExpPitch on empty List"
-minExpPitch (x:xs) = snd (minTail x xs)
-    where minTail currentMin [] = currentMin
-          minTail (m,n) (p:ps)
-              | m > (fst p) = minTail p ps
-              | otherwise   = minTail (m,n) ps
+minExpPitch (x:xs) = snd (minTuple x xs)
+    where minTuple curMin [] = curMin
+          minTuple (m,n) (x:xs)
+              | m > (fst x) = minTuple x xs
+              | otherwise   = minTuple (m,n) xs
 -- | getExpNum takes a target [Pitch] and GameState as input,
 --   groups all possible targets in GameState with the same feedback,
 --   retuns the average number of possible targets remains.
